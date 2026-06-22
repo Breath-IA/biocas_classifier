@@ -1,0 +1,93 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# BioCAS 2023 – Preprocessing Pipeline Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+data:
+  raw_wav_dir:  "data/train/wav"
+  raw_json_dir: "data/train/json"
+  output_dir:   "data/processed"
+  task: "1-2"           # "1-1" (binary) | "1-2" (7-class)
+
+# ── Stage toggles ─────────────────────────────────────────────────────────────
+stages:
+  loading:           { enabled: true }
+  resampling:        { enabled: true }
+  event_extraction:  { enabled: true }
+  balanced_sampling: { enabled: true }
+  concatenation:     { enabled: true }
+  padding:           { enabled: true }
+  augmentation:      { enabled: true }
+  log_mel:           { enabled: true }
+  spec_augment:      { enabled: true }
+  normalization:     { enabled: true }
+
+# ── Per-stage hyper-parameters ────────────────────────────────────────────────
+loading:
+  target_sr: 4000          # Resample everything to 4 kHz (common for lung sounds)
+  keep_poor_quality: false # Exclude "Poor Quality" recordings
+
+event_extraction:
+  min_duration_s: 0.2      # Drop events shorter than this (annotation noise)
+  keep_unlabelled: false   # Drop events with unknown type strings
+
+balanced_sampling:
+  strategy: "proportional" # "proportional" | "equal" | "sqrt"
+  # proportional: sample each class proportional to sqrt(class_size) / sum(sqrt)
+  target_samples_per_class: null  # null → derived automatically from strategy
+  random_seed: 42
+
+concatenation:
+  min_duration_s: 8.0      # Concatenate short clips until reaching this length
+  max_duration_s: 8.0
+
+padding:
+  mode: "reflect"          # "zero" | "reflect" | "tile"
+  target_duration_s: 8.0
+
+augmentation:
+  # SpecAugment (applied on the spectrogram, after log-mel)
+  spec_augment:
+    enabled: true
+    freq_mask_param: 27     # Max frequency mask width (mel bins)
+    time_mask_param: 80     # Max time mask width (frames)
+    num_freq_masks: 2
+    num_time_masks: 2
+    mask_value: 0.0         # Value to fill masked regions
+
+  # Waveform-level augments (applied before spectrogram)
+  time_shift:
+    enabled: true
+    max_shift_s: 0.5
+
+  add_noise:
+    enabled: true
+    snr_db_range: [15, 40]  # Uniform sample from this range
+
+  pitch_shift:
+    enabled: false          # Expensive – off by default
+    semitone_range: [-2, 2]
+
+  time_stretch:
+    enabled: true
+    rate_range: [0.85, 1.15]
+
+log_mel:
+  n_fft: 512
+  hop_length: 128
+  n_mels: 64
+  fmin: 50
+  fmax: 2000
+
+normalization:
+  strategy: "instance"      # "instance" | "global" | "none"
+  # global: subtract dataset mean, divide by dataset std (computed on train set)
+  # instance: per-sample (mean=0, std=1)
+  global_stats_path: "data/processed/global_stats.json"
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+runner:
+  chunk_size: 256      # Eventos por chunk en la Fase 2 (ajustar según RAM disponible)
+  batch_size: 64       # Alias — usado por pipeline_api
+  device: "auto"       # "auto" | "cpu" | "cuda" | "cuda:0"
+  log_level: "INFO"
+  fail_fast: true
