@@ -3,23 +3,31 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 data:
-  raw_wav_dir:  "data/train/wav"
-  raw_json_dir: "data/train/json"
-  output_dir:   "data/processed"
+  raw_wav_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
+    data\\raw_data\\train\\wav"
+  raw_json_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
+    data\\raw_data\\train\\json"
+  test_wav_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
+    data\\raw_data\\test\\wav"
+  test_json_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
+    data\\raw_data\\test\\json"
+  output_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
+    data\\processed"
   task: "1-2"           # "1-1" (binary) | "1-2" (7-class)
+  test: false
 
 # ── Stage toggles ─────────────────────────────────────────────────────────────
 stages:
-  loading:           { enabled: true }
-  resampling:        { enabled: true }
-  event_extraction:  { enabled: true }
-  balanced_sampling: { enabled: true }
-  concatenation:     { enabled: true }
-  padding:           { enabled: true }
-  augmentation:      { enabled: true }
-  log_mel:           { enabled: true }
-  spec_augment:      { enabled: true }
-  normalization:     { enabled: true }
+  loading: {enabled: true}
+  resampling: {enabled: true}
+  event_extraction: {enabled: true}
+  balanced_sampling: {enabled: true}
+  concatenation: {enabled: true}
+  padding: {enabled: true}
+  augmentation: {enabled: true}
+  log_mel: {enabled: true}
+  spec_augment: {enabled: true}
+  normalization: {enabled: true}
 
 # ── Per-stage hyper-parameters ────────────────────────────────────────────────
 loading:
@@ -33,7 +41,7 @@ event_extraction:
 balanced_sampling:
   strategy: "proportional" # "proportional" | "equal" | "sqrt"
   # proportional: sample each class proportional to sqrt(class_size) / sum(sqrt)
-  target_samples_per_class: null  # null → derived automatically from strategy
+  target_samples_per_class:       # null → derived automatically from strategy
   random_seed: 42
 
 concatenation:

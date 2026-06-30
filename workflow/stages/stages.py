@@ -83,8 +83,12 @@ class LoadingStage(BaseStage):
         self.load_audio = load_audio
 
     def _run(self, batch: Batch, cfg: Any) -> Batch:
-        wav_dir   = Path(cfg.data.raw_wav_dir)
-        json_dir  = Path(cfg.data.raw_json_dir)
+        if cfg.data.test:
+            wav_dir   = Path(cfg.data.test_wav_dir)
+            json_dir  = Path(cfg.data.test_json_dir)
+        else:
+            wav_dir   = Path(cfg.data.raw_wav_dir)
+            json_dir  = Path(cfg.data.raw_json_dir)
         keep_poor = getattr(cfg.loading, "keep_poor_quality", False)
 
         wav_files        = sorted(wav_dir.glob("*.wav"))

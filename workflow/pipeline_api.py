@@ -36,81 +36,10 @@ from stages.base import AudioSample
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Config helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def load_config(
-    config_dir:  str            = "config",
-    config_name: str            = "pipeline",
-    overrides:   Optional[list] = None,
-) -> DictConfig:
-    """
-    Carga el YAML de configuración y aplica overrides opcionales.
-
-    Parameters
-    ----------
-    config_dir  : Ruta al directorio de configs (relativa al cwd del notebook).
-    config_name : Nombre del archivo YAML sin extensión.
-    overrides   : Lista de strings estilo Hydra, ej. ["data.task=1-1", "log_mel.n_mels=128"].
-
-    Returns
-    -------
-    cfg : DictConfig navegable con punto (cfg.log_mel.n_mels).
-
-    Examples
-    --------
-    >>> cfg = load_config()
-    >>> cfg = load_config(overrides=["data.task=1-1", "log_mel.n_mels=128"])
-    """
-    GlobalHydra.instance().clear()
-
-    abs_config_dir = str(Path(config_dir).resolve())
-    with initialize_config_dir(config_dir=abs_config_dir, version_base=None):
-        cfg = compose(config_name=config_name, overrides=overrides or [])
-
-    return cfg
-
-
-def show_config(cfg: DictConfig) -> None:
-    """Pretty-print el config activo."""
-    print(OmegaConf.to_yaml(cfg))
-
-
-def patch_config(cfg: DictConfig, updates: Dict[str, Any]) -> DictConfig:
-    """
-    Aplica overrides en forma de dict sobre un config existente.
-    Útil para exploración rápida en notebooks sin recargar desde disco.
-
-    Parameters
-    ----------
-    updates : dict con keys en notación de punto, ej.
-              {"log_mel.n_mels": 128, "balanced_sampling.strategy": "equal"}
-
-    Returns
-    -------
-    Nuevo DictConfig con los cambios aplicados (el original no se muta).
-
-    Examples
-    --------
-    >>> cfg2 = patch_config(cfg, {"log_mel.n_mels": 128, "runner.n_workers": 2})
-    """
-    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-
-    for dotted_key, value in updates.items():
-        keys = dotted_key.split(".")
-        node = cfg_dict
-        for k in keys[:-1]:
-            node = node.setdefault(k, {})
-        node[keys[-1]] = value
-
-    return OmegaConf.create(cfg_dict)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Persistencia — guardar y cargar datos procesados
 # ─────────────────────────────────────────────────────────────────────────────
 
-def save_dataset(dataset: "BioCASDataset", output_dir: str) -> None:
+def save_dataset(dataset: "BioCASDataset", output_dir: str, test: bool) -> None:
     """
     Guarda el dataset como un archivo .npy por muestra + un CSV de índice.
 
@@ -149,7 +78,9 @@ def save_dataset(dataset: "BioCASDataset", output_dir: str) -> None:
                if isinstance(v, (str, int, float, bool))},  # solo escalares al CSV
         })
 
-    pd.DataFrame(rows).to_csv(out / "index.csv", index=False)
+    index_name = "index.csv"
+        
+    pd.DataFrame(rows).to_csv(out / index_name, index=False)
 
     print(f"✓ Dataset guardado en '{out}'")
 
@@ -185,39 +116,6 @@ def processed_exists(output_dir: str) -> bool:
     """Devuelve True si ya hay datos procesados guardados en output_dir."""
     out = Path(output_dir)
     return (out / "index.csv").exists() and (out / "features").is_dir()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Pipeline builder
-# ─────────────────────────────────────────────────────────────────────────────
-
-def build_pipeline(cfg: DictConfig) -> PreprocessingPipeline:
-    """Construye la pipeline a partir de un config ya cargado."""
-    return PreprocessingPipeline.from_config(cfg)
-
-
-def run_pipeline(cfg: DictConfig, save: bool = True) -> BioCASDataset:
-    """
-    Construye la pipeline, la corre, y opcionalmente guarda el resultado.
-
-    Parameters
-    ----------
-    cfg  : Config cargado con load_config().
-    save : Si True (default), guarda automáticamente en cfg.data.output_dir.
-
-    Returns
-    -------
-    BioCASDataset listo para DataLoader.
-    """
-    pipeline = build_pipeline(cfg)
-    print(pipeline.summary())
-    batch   = pipeline.run()
-    dataset = BioCASDataset(batch)
-
-    if save:
-        save_dataset(dataset, cfg.data.output_dir)
-
-    return dataset
 
 
 def load_or_run(cfg: DictConfig) -> BioCASDataset:
@@ -326,15 +224,28 @@ def build_pipeline(cfg: DictConfig) -> PreprocessingPipeline:
     return PreprocessingPipeline.from_config(cfg)
 
 
-def run_pipeline(cfg: DictConfig) -> BioCASDataset:
+def run_pipeline(cfg: DictConfig, save: bool = True) -> BioCASDataset:
     """
-    Shortcut: construye la pipeline, la corre y devuelve un Dataset listo para DataLoader.
+    Construye la pipeline, la corre, y opcionalmente guarda el resultado.
+
+    Parameters
+    ----------
+    cfg  : Config cargado con load_config().
+    save : Si True (default), guarda automáticamente en cfg.data.output_dir.
 
     Returns
     -------
-    BioCASDataset con .feature y .label_int por muestra.
+    BioCASDataset listo para DataLoader.
     """
     pipeline = build_pipeline(cfg)
     print(pipeline.summary())
-    batch    = pipeline.run()
-    return BioCASDataset(batch)
+    batch   = pipeline.run()
+    dataset = BioCASDataset(batch)
+
+    if save:
+        if cfg.data.test:
+            save_dataset(dataset, cfg.data.output_dir + "/test")
+        else:
+            save_dataset(dataset, cfg.data.output_dir + "/train")
+
+    return dataset

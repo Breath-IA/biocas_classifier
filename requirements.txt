@@ -1,5 +1,19 @@
+## ── Pipeline core ───────────────────────────────────────────────────────────
 hydra-core>=1.3
 omegaconf>=2.3
+numpy>=1.24
+ 
+## ── Audio / Deep Learning ───────────────────────────────────────────────────
 torch>=2.0
 torchaudio>=2.0
-numpy>=1.24
+torchvision>=0.15      # train.py: efficientnet_b0
+torchsummary>=1.5.1    # research.ipynb: model summary
+ 
+## ── Data wrangling / config ─────────────────────────────────────────────────
+pandas>=2.0
+ruamel.yaml>=0.17       # data_config.py: edición in-place de pipeline.yaml preservando comentarios
+ 
+## ── Utilidades ───────────────────────────────────────────────────────────────
+tqdm>=4.65
+matplotlib>=3.7         # notebooks: gráficos exploratorios
+ 

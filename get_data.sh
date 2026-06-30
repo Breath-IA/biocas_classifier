@@ -1,5 +1,15 @@
+# ── Argumentos del script ─────────────────────────────────────────────────
+# --data-dir : carpeta raíz donde quedan train/{wav,json} y test/{wav,json}
+#              (se reenvía tal cual a data_manifest.py al final)
+# --config   : ruta del yaml de pipeline a actualizar (se reenvía también)
+DATA_DIR_ARG="./data/raw_data"
+DATA_OUT_DIR_ARG="./data/processed"
+CONFIG_ARG="config/pipeline.yaml"
+
+
 # pull dataset
-mkdir -p data
+mkdir -p $DATA_DIR_ARG
+mkdir -p $DATA_OUT_DIR_ARG
 cd ./data
 if [ -d "SPRSound" ]; then
     echo "El repositorio ya existe"
@@ -7,7 +17,6 @@ else
     git clone https://github.com/SJTU-YONGFU-RESEARCH-GRP/SPRSound.git
     echo "Repo descargado"
 fi
-mkdir -p raw_data
 cd SPRSound
 
 pwd
@@ -16,6 +25,7 @@ pwd
 # Configuración de rutas basada en tu imagen
 REPO_DIR="./"  # Ajusta si tu "data" raíz tiene otro nombre
 # Si estás ejecutando el script al lado de 'raw_data', usa: REPO_DIR="./raw_data/SPRSound"
+USE_SYMLINKS="false"
 
 DATA_DIR="../raw_data"
 link_or_copy() {
@@ -26,7 +36,7 @@ link_or_copy() {
         return
     fi
 
-    if [ "$USE_SYMLINKS" = true ]; then
+    if [ "$USE_SYMLINKS" = "true" ]; then
         ln -s "$(readlink -f "$src")" "$dst"
     else
         cp -p "$src" "$dst"
@@ -103,6 +113,8 @@ for source in "${SOURCES[@]}"; do
 
     printf "  %-13s | %-4s → %5d WAVs  %5d JSONs\n" "$split" "$year" "$n_wav" "$n_json"
 done
-
 cd ..
 rm -rf ./SPRSound
+cd ..
+
+python3 data_config.py --data-dir "$DATA_DIR_ARG" --output-dir "$DATA_OUT_DIR_ARG" --config "$CONFIG_ARG"
