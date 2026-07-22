@@ -12,6 +12,10 @@ torchsummary>=1.5.1    # research.ipynb: model summary
 ## ── Data wrangling / config ─────────────────────────────────────────────────
 pandas>=2.0
 ruamel.yaml>=0.17       # data_config.py: edición in-place de pipeline.yaml preservando comentarios
+
+## ── Hyperparameter search & experiment tracking ──────────────────────────────
+optuna>=3.5
+wandb>=0.17
  
 ## ── Utilidades ───────────────────────────────────────────────────────────────
 tqdm>=4.65

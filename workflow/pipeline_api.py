@@ -39,7 +39,7 @@ from stages.base import AudioSample
 # Persistencia — guardar y cargar datos procesados
 # ─────────────────────────────────────────────────────────────────────────────
 
-def save_dataset(dataset: "BioCASDataset", output_dir: str, test: bool) -> None:
+def save_dataset(dataset: "BioCASDataset", output_dir: str) -> None:
     """
     Guarda el dataset como un archivo .npy por muestra + un CSV de índice.
 
