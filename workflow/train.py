@@ -328,7 +328,7 @@ def objective(
         )
 
     run.finish()
-    return best_val_acc
+    return best_val_acc, model
 
 
 # ─────────────────────────────────────────────────────────────────────────────
