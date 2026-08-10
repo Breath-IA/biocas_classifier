@@ -87,6 +87,16 @@ test_rows  = scan_events(DATA_DIR / "test"  / "json")
 df_train = pd.DataFrame(train_rows)
 df_test  = pd.DataFrame(test_rows)
 
+from ruamel.yaml import YAML as _YAML
+_yaml = _YAML()
+_cfg  = _yaml.load(args.config) if args.config.exists() else {}
+allowed = list((_cfg.get("data") or {}).get("allowed_classes") or [])
+
+if allowed:
+    df_train = df_train[df_train["label"].isin(allowed)].reset_index(drop=True)
+    df_test  = df_test[df_test["label"].isin(allowed)].reset_index(drop=True)
+    print(f"Filtrando a clases: {allowed}")
+
 print(f"Train events : {len(df_train):,}")
 print(f"Test  events : {len(df_test):,}")
 print()

@@ -15,6 +15,7 @@ data:
     data\\processed"
   task: "1-2"           # "1-1" (binary) | "1-2" (7-class)
   test: false
+  allowed_classes: ["N", "W", "FC", "WC"]
 
 # ── Stage toggles ─────────────────────────────────────────────────────────────
 stages:
@@ -39,25 +40,25 @@ event_extraction:
   keep_unlabelled: false   # Drop events with unknown type strings
 
 balanced_sampling:
-  strategy: "sqrt" # "proportional" | "equal" | "sqrt"
+  strategy: "proportional" # "proportional" | "equal" | "sqrt"
   # proportional: sample each class proportional to sqrt(class_size) / sum(sqrt)
   target_samples_per_class: null      # null → derived automatically from strategy
   random_seed: 42
 
 concatenation:
-  min_duration_s: 8.0      # Concatenate short clips until reaching this length
-  max_duration_s: 8.0
+  min_duration_s: 3.0      # Concatenate short clips until reaching this length
+  max_duration_s: 3.0
 
 padding:
   mode: "tile"          # "zero" | "reflect" | "tile"
-  target_duration_s: 8.0
+  target_duration_s: 3.0
 
 augmentation:
   # SpecAugment (applied on the spectrogram, after log-mel)
   spec_augment:
     enabled: true
     freq_mask_param: 8     # Max frequency mask width (mel bins)
-    time_mask_param: 12     # Max time mask width (frames)
+    time_mask_param: 5     # Max time mask width (frames)
     num_freq_masks: 1
     num_time_masks: 1
     mask_value: 0.0         # Value to fill masked regions
@@ -65,11 +66,11 @@ augmentation:
   # Waveform-level augments (applied before spectrogram)
   time_shift:
     enabled: true
-    max_shift_s: 0.25
+    max_shift_s: 0.15
 
   add_noise:
     enabled: true
-    snr_db_range: [10, 35]  # Uniform sample from this range
+    snr_db_range: [20, 35]  # Uniform sample from this range
 
   pitch_shift:
     enabled: true          # Expensive – off by default

@@ -148,9 +148,23 @@ def val_epoch(
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Nombres de las 7 clases según LABEL_MAP_1_2
-CLASS_NAMES = {0: "Normal", 1: "Rhonchi", 2: "Wheeze",
-               3: "Stridor", 4: "Coarse Crackle",
-               5: "Fine Crackle", 6: "Wheeze+Crackle"}
+from omegaconf import OmegaConf
+
+cfg = OmegaConf.load("config/pipeline.yaml")
+allowed = list(cfg.data.get("allowed_classes", []))
+
+CLASS_NAMES_MAP = {
+    "N": "Normal", "R": "Rhonchi", "W": "Wheeze",
+    "S": "Stridor", "CC": "Coarse Crackle",
+    "FC": "Fine Crackle", "WC": "Wheeze+Crackle",
+}
+
+if allowed:
+    CLASS_NAMES = {idx: CLASS_NAMES_MAP[cls] for idx, cls in enumerate(allowed)}
+else:
+    CLASS_NAMES = {0: "Normal", 1: "Rhonchi", 2: "Wheeze",
+                   3: "Stridor", 4: "Coarse Crackle",
+                   5: "Fine Crackle", 6: "Wheeze+Crackle"}
 
 
 def log_val_image(
@@ -220,9 +234,8 @@ def objective(
 
     # ── Hiperparámetros sugeridos por Optuna (o defaults) ─────────────────
     if trial is not None:
-        model_name = trial.suggest_categorical(
-            "model", list(MODEL_REGISTRY.keys())
-        )
+        candidates = getattr(args, "allowed_models", None) or list(MODEL_REGISTRY.keys())
+        model_name = trial.suggest_categorical("model", candidates)
         lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
         weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-2, log=True)
         batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512])
@@ -328,7 +341,7 @@ def objective(
         )
 
     run.finish()
-    return best_val_acc, model
+    return best_val_acc
 
 
 # ─────────────────────────────────────────────────────────────────────────────

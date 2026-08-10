@@ -220,8 +220,12 @@ class EventExtractionStage(BaseStage):
     name = "event_extraction"
 
     def _run(self, batch: Batch, cfg: Any) -> Batch:
-        task      = cfg.data.task
-        label_map = LABEL_MAP_1_1 if task == "1-1" else LABEL_MAP_1_2
+        allowed = list(cfg.data.get("allowed_classes", []))
+        if allowed:
+            label_map = {cls: idx for idx, cls in enumerate(allowed)}
+        else:
+            task      = cfg.data.task
+            label_map = LABEL_MAP_1_1 if task == "1-1" else LABEL_MAP_1_2
         ecfg      = cfg.event_extraction
         lazy      = False   # se detecta automáticamente por sr == -1
 
@@ -257,6 +261,10 @@ class EventExtractionStage(BaseStage):
                     continue
 
                 label_int = label_map.get(norm_type, -1)
+
+                # ── Filtro de clases permitidas ──────────────────────────────────────
+                if allowed and norm_type not in allowed:
+                    continue
 
                 if lazy:
                     # No cortamos el waveform todavía — guardamos timestamps en meta
