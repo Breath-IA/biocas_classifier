@@ -20,4 +20,4 @@ wandb>=0.17
 ## ── Utilidades ───────────────────────────────────────────────────────────────
 tqdm>=4.65
 matplotlib>=3.7         # notebooks: gráficos exploratorios
- 
+ tabulate
