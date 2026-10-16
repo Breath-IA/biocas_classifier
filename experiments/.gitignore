@@ -1,0 +1,3 @@
+# derivados grandes y reproducibles (cada experimento los regenera con sus scripts)
+cache/
+*.npz
