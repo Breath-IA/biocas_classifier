@@ -1,0 +1,6 @@
+# Optuna studies, caches, logs and stop file (splits/ and reports are committed)
+results/*.db
+cache/
+logs/
+STOP
+*.npz
