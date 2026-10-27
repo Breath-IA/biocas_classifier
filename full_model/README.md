@@ -4,9 +4,9 @@ Trains many small CNN variants for hours on a CUDA machine, composes the best ga
 cascade, and evaluates it once on a **class-balanced test set** (same number of N, W and FC events). Every deployable model stays under
 1 000 000 trainable parameters, for later FPGA tests. Design and reasoning: [plan.md](plan.md). The process is driven by the [Makefile](../Makefile) at the repo root.
 
-> **Status:** the Makefile and this README are the specification; the scripts in this folder (`make_splits.py`, `search.py`, …) are built in the phases of
-> [plan.md](plan.md) §10. Flags below are the interface those scripts must implement. Targets that call a script that does not exist yet fail with "No such file".
-> What already works today: `install`, `install-cuda`, `check-gpu`, `data`, `features`, `synth`.
+> **Status:** every script of the Makefile exists and the whole process was run end to end (`run_full_model_test.bat` / `make selftest`, tiny settings, CPU).
+> The 12-hour GPU run itself has not been done yet. First thing to do on a new machine: `make selftest` (a few minutes) — if it prints
+> `ALL STAGES PASSED`, `make smoke` and `make full-run` will work too.
 
 ## 1. Set up the other PC
 
@@ -20,7 +20,12 @@ make install            # .venv + requirements.txt (CPU torch)
 make install-cuda       # swaps torch for the CUDA build; CUDA_TAG=cu121 by default (cu118, cu124 ... see pytorch.org)
 make check-gpu          # must print "cuda available: True"
 make data features synth   # SPRSound download (~GB), per-event table, synthetic set for gate 2 pretraining
+make selftest              # whole process with tiny settings on CPU (~10 min): proves the install works. Windows without make: run_full_model_test.bat
 ```
+
+Linux notes: use the repo as cloned (`.gitattributes` forces LF in `*.sh` and the Makefile; a CRLF `get_data.sh` fails with `$'': command not found`).
+If `make` stops with "No such file" for a script, `git pull` — all scripts live in `full_model/`. `make data features synth splits cache` are needed once;
+`data/`, `cache/`, the Optuna `.db` files and `experiments/**/cache` are git-ignored and rebuilt per machine, `full_model/splits/` is committed.
 
 Keep the machine awake for the whole run: on Windows `powercfg /change standby-timeout-ac 0` and `powercfg /change hibernate-timeout-ac 0`; keep it on AC power.
 
@@ -66,7 +71,8 @@ Interrupted? Run the same command again: searches resume from the SQLite study, 
 | `final` | One-time balanced-test evaluation; refuses to run without `CONFIRM_FINAL=1` |
 | `fpga` | Parameter / MAC / memory / operator / int8 report on the exported ONNX |
 | `report` | Print cascade, final and FPGA reports |
-| `mcp` | Start the MCP server (phase 6) |
+| `mcp` | Start the MCP server (needs `pip install mcp`) |
+| `selftest` | Whole process with tiny settings on CPU, writing only to `results_test/` and `splits_test/`; `DEVICE=cuda` to include the GPU |
 | `all` | Prepare everything, no training |
 | `full-run` | `all` + search + refit + cascade + final + fpga + report |
 | `clean` | Delete `cache/`, `logs/`, `STOP` (keeps `splits/` and `results/`) |
@@ -92,6 +98,7 @@ Interrupted? Run the same command again: searches resume from the SQLite study, 
 | `CONFIRM_FINAL` | `0` | Must be `1` for `make final` |
 | `CUDA_TAG` | `cu121` | PyTorch CUDA wheel index for `install-cuda` |
 | `PY` | `.venv/...python` | Python interpreter to use |
+| `SMOKE_ARGS` | `--epochs-max 8 --n-per-epoch 3000` | Epoch limits used by `make smoke` |
 | `ARGS` | empty | Extra flags appended to the script of the target (e.g. `ARGS="--pruner none"`) |
 
 Choosing the hours: run `make smoke`, read the seconds per trial `s`; trials ≈ `3600 × hours / s` (times `N_JOBS` if the GPU is not saturated).
@@ -126,14 +133,17 @@ Run from anywhere (paths come from the repo root). Scripts are driven by the Mak
 | `--cache-on-cpu` | off | Keep the mel cache in pinned CPU memory instead of on the GPU (small GPUs) |
 | `--wandb {0,1}` | `0` | |
 | `--status` | | Print progress of the study and exit |
-| `--seed` | `42` | |
+| `--seed` | `42` | A resumed study continues with a different random sequence (seed + trials done) |
+| `--epochs-max N` | `40` | Maximum epochs of one trial (early stopping usually ends it sooner) |
+| `--n-per-epoch N` | `6000` | Samples drawn per "epoch" (class-balanced, with replacement): fixes the time of a trial |
 
 Creating the file `full_model/STOP` stops a running search after its current trial.
 
-**`refit_top.py`**: `--gate` · `--study` · `--storage` · `--top-k 5` · `--cv-folds 5` · `--seeds 3` · `--device` · `--epochs-max 60`
+**`refit_top.py`**: `--gate` · `--study` · `--storage` · `--top-k 5` · `--cv-folds 5` · `--seeds 3` · `--device` · `--epochs-max 60` · `--n-per-epoch 6000` · `--trial-max-min 15`
 **`cascade_eval.py`**: `--study` · `--max-params 1000000` · `--top-k 5` · `--size-tolerance-se 1.0` (choose the smallest pair within this many standard errors of the best)
-**`final_test.py`**: `--study` · `--max-params` · `--device` · `--confirm` (required) · `--allow-retest` (the test set is normally opened once; a lock file records it) · `--bootstrap 2000` (patient-clustered)
+**`final_test.py`**: `--study` · `--max-params` · `--device` · `--confirm` (required) · `--allow-retest` (the test set is normally opened once; a lock file records it) · `--bootstrap 2000` (patient-clustered) · `--seeds 3` · `--no-loyo` · `--no-ablation`
 **`fpga_report.py`**: `--study` · `--max-params` · `--int8` · `--qat-tolerance 0.02`
+**`selftest.py`**: `--device cpu|cuda` · `--keep` (reuse `results_test/`) · `--skip-cache` · `--k-per-class 40`. Environment variables `FM_SPLITS_DIR` / `FM_RESULTS_DIR` redirect `splits/` and `results/` for any script.
 **`mcp_server.py`**: `--study` · `--storage` · `--allow-enqueue` · `--allow-stop` (both off by default; read-only otherwise)
 
 ## 6. Outputs
@@ -170,4 +180,7 @@ full_model/
 | Out of GPU memory | Lower `N_JOBS` to 1; the runner falls back to keeping the cache in pinned CPU memory with `ARGS="--cache-on-cpu"` |
 | `make: command not found` on Windows | Install make and run from Git Bash (§1) |
 | Search does not start after `make stop` | Delete `full_model/STOP` |
+| `bash: get_data.sh: $'': command not found` | CRLF line endings: `sed -i 's/$//' get_data.sh Makefile` (the repo's `.gitattributes` prevents it on a fresh clone) |
+| `segments_spectral.csv not found` / `events_mel_*.npz not found` | Run `make features` / `make cache` (they are git-ignored or untracked and built per machine) |
+| `selftest` stops at a stage | The log is `full_model/logs/selftest_<time>.log`; the stage name tells which script failed |
 | Most trials end "pruned: over parameter cap" | `make check-budget` shows the rejected fraction; narrow the width/depth ranges in `search_space.py` |

@@ -5,7 +5,7 @@ unattended for ~12 h on a CUDA machine. Companion files: [`../Makefile`](../Make
 [`README.md`](README.md) (commands and flags). The repo-root [`plan.md`](../plan.md) (physics-informed MoE protocol) is unchanged;
 this plan implements its gate 1 → gate 2 hierarchy, steps 1 and 3 of its protocol, under new constraints.
 
-**Status:** nothing in this folder except the documents exists yet. Section 10 lists what is built in each phase.
+**Status:** phases 0–3 and 5 are implemented and were run end to end with tiny settings (`make selftest`); the 12 h GPU run (phase 4) and the MCP server (phase 6, `mcp_server.py`, needs `pip install mcp`) are written but not yet exercised at scale. Section 10 lists what is built in each phase.
 
 ## 1. Requirements and decisions
 
@@ -79,7 +79,7 @@ One builder, `models_small.py`, produces every variant from a config dict; `sear
 | Head | linear · one hidden layer {16, 32, 64}; dropout {0 … 0.5} |
 | Input | band {2000/64 mel, 900/40 mel}; 3 s window fixed |
 | Gate-2 extras | synthetic pretraining on/off (`synth_v2`), ratio {0.5, 1.0} |
-| Training | AdamW/SGD, lr (log), weight decay (log), batch {64, 128, 256}, schedule {cosine, one-cycle}, loss {BCE+pos_weight, focal(γ), label smoothing}, SpecAugment strengths, spectrogram mixup |
+| Training | AdamW/SGD, lr (log), weight decay (log), batch {64, 128, 256}, schedule {cosine, one-cycle}, loss {BCE, focal(γ), label smoothing} (no pos_weight: the class-balanced sampler already equalises the classes), SpecAugment strengths, spectrogram mixup |
 
 **Budget enforcement (three layers):**
 
@@ -172,7 +172,7 @@ Safeguards: no arbitrary shell or file access (paths resolved inside `full_model
 | Phase | Build | Done when |
 |---|---|---|
 | 0. Housekeeping | `requirements.txt` completed (scikit-learn, scipy, soundfile, joblib were missing; `mcp` added as optional); this plan, Makefile, README | `make help` runs on the other PC |
-| 1. Data | `make_splits.py`, `build_event_cache.py` | Test CSV has exactly K per class; zero patient overlap (assert); cache mels equal `cnn_data.to_mel` output (max abs diff < 1e-5 on 200 random events) |
+| 1. Data | `make_splits.py`, `build_event_cache.py` | Test CSV has exactly K per class; zero patient overlap (assert); cache mels equal `cnn_data.to_mel` output (max abs diff < 1e-2 on 200 random events: the cache is float16, rounding error ≈ 1e-3) |
 | 2. Models + budget | `search_space.py`, `models_small.py`, `check_budget.py` | `make check-budget` passes; 0 builds above the cap reach training |
 | 3. GPU trainer + search | `train_lib.py`, `search.py` | `make smoke` finishes in minutes on GPU, resumes after Ctrl+C, honours `STOP` and `--hours`; seconds/trial printed |
 | 4. 12 h run | run `make full-run`, then `refit_top.py`, `cascade_eval.py` | Finalists ranked by CV; pair Pareto set written |
@@ -195,7 +195,7 @@ Phases 1–3 should be validated on this machine (CPU, tiny `--hours`) before th
 ```
 full_model/
 ├── plan.md  README.md
-├── make_splits.py  build_event_cache.py
+├── fm_common.py  make_splits.py  build_event_cache.py  selftest.py
 ├── search_space.py  models_small.py  train_lib.py  search.py  check_budget.py
 ├── refit_top.py  cascade_eval.py  final_test.py  fpga_report.py  mcp_server.py
 ├── splits/      balanced_test.csv, train_pool.csv, val_split.csv, cv_folds.csv   (committed)

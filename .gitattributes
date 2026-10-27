@@ -1,0 +1,10 @@
+# Shell scripts and the Makefile must keep LF endings, or bash/make fail on Linux ("$'\r': command not found")
+*.sh        text eol=lf
+Makefile    text eol=lf
+*.mk        text eol=lf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.png       binary
+*.pt        binary
+*.onnx      binary
+*.npz       binary

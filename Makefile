@@ -38,6 +38,7 @@ STUDY          ?= full
 WANDB          ?= 0
 CONFIRM_FINAL  ?= 0
 ARGS           ?=
+SMOKE_ARGS     ?= --epochs-max 8 --n-per-epoch 3000
 
 FM        := full_model
 E4        := experiments/gate2_event_type/e04_synthetic_augmentation
@@ -56,7 +57,7 @@ CACHE_NPZ := $(FM)/cache/events_mel_2000.npz
 
 .PHONY: help install install-cuda check-gpu data features synth splits cache check-budget smoke \
         search-g1 search-g2 search search-bg stop status refit cascade final fpga report mcp \
-        all full-run clean
+        all full-run clean selftest
 
 help: ## list the targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/:.*## /\t/' | awk -F'\t' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -85,7 +86,7 @@ $(RAW_STAMP):
 
 data: $(RAW_STAMP) ## download and reorganise SPRSound into data/raw_data
 
-$(FEATURES): $(RAW_STAMP)
+$(FEATURES): | $(RAW_STAMP)
 	$(PY) experiments/common/extract_spectral_features.py
 
 features: $(FEATURES) $(PHYSICS) ## per-event spectral and physics tables (~4 min)
@@ -95,7 +96,7 @@ $(PHYSICS): $(FEATURES)
 
 # Synthetic mels for the optional gate 2 pretraining (e05 recipe, v2 calibration). Needs the committed e05
 # results/calibration_map_v2.json and the physics table (builder.py reads it). No synthetic WAVs are needed.
-$(SYNTH_NPZ): $(RAW_STAMP) $(PHYSICS)
+$(SYNTH_NPZ): $(PHYSICS) | $(RAW_STAMP)
 	test -f $(E5)/results/calibration_map_v2.json
 	$(PY) $(E5)/build_synth_mels.py --name v2 --calibration $(E5)/results/calibration_map_v2.json --n-per-class 2500 --seed 22 --match-hosts
 
@@ -107,7 +108,7 @@ $(SPLIT_CSV): $(FEATURES) $(FM)/make_splits.py
 
 splits: $(SPLIT_CSV) ## frozen balanced test set (K per class N/W/FC) + patient-disjoint train/val/CV folds
 
-$(CACHE_NPZ): $(SPLIT_CSV) $(FM)/build_event_cache.py
+$(CACHE_NPZ): $(FEATURES) $(FM)/build_event_cache.py
 	$(PY) $(FM)/build_event_cache.py --band 2000
 	$(PY) $(FM)/build_event_cache.py --band 900
 
@@ -116,15 +117,15 @@ cache: $(CACHE_NPZ) ## log-mel cache of every event (both bands)
 check-budget: ## sample many configs, assert none above the parameter cap reaches training
 	$(PY) $(FM)/check_budget.py --max-params-net $(MAX_PARAMS_NET) --max-params $(MAX_PARAMS) --n-samples 2000
 
-smoke: splits cache check-budget ## 5-minute end-to-end check on a few trials (prints seconds per trial)
-	$(PY) $(FM)/search.py --gate 1 --hours 0.05 --study smoke_g1 $(COMMON_SEARCH) --max-trials 3 $(ARGS)
-	$(PY) $(FM)/search.py --gate 2 --hours 0.05 --study smoke_g2 $(COMMON_SEARCH) --max-trials 3 $(ARGS)
+smoke: splits cache check-budget synth ## 5-minute end-to-end check on a few trials (prints seconds per trial)
+	$(PY) $(FM)/search.py --gate 1 --hours 0.05 --study smoke_g1 $(COMMON_SEARCH) --max-trials 3 $(SMOKE_ARGS) $(ARGS)
+	$(PY) $(FM)/search.py --gate 2 --hours 0.05 --study smoke_g2 $(COMMON_SEARCH) --max-trials 3 $(SMOKE_ARGS) $(ARGS)
 
 # ── Long search ───────────────────────────────────────────────────────────────────────────────
 search-g1: splits cache ## Optuna search, gate 1 (N vs abnormal) for HOURS_G1 hours; resumable
 	$(PY) $(FM)/search.py --gate 1 --hours $(HOURS_G1) --study $(STUDY)_g1 $(COMMON_SEARCH) $(ARGS)
 
-search-g2: splits cache ## Optuna search, gate 2 (W vs FC) for HOURS_G2 hours; resumable
+search-g2: splits cache synth ## Optuna search, gate 2 (W vs FC) for HOURS_G2 hours; resumable
 	$(PY) $(FM)/search.py --gate 2 --hours $(HOURS_G2) --study $(STUDY)_g2 $(COMMON_SEARCH) $(ARGS)
 
 search: search-g1 search-g2 ## both searches, one after the other
@@ -173,5 +174,8 @@ full-run: all search refit cascade ## unattended ~12 h run: prepare, search both
 	$(MAKE) final CONFIRM_FINAL=1
 	$(MAKE) fpga report
 
+selftest: ## whole process with tiny settings on CPU (a few minutes); writes only to *_test folders (DEVICE=cuda to use the GPU)
+	$(PY) $(FM)/selftest.py --device $(if $(filter cuda%,$(DEVICE)),$(DEVICE),cpu)
+
 clean: ## remove caches and logs of the full_model pipeline (keeps splits/ and results/)
-	rm -rf $(FM)/cache $(FM)/logs $(FM)/STOP
+	rm -rf $(FM)/cache $(FM)/logs $(FM)/STOP $(FM)/results_test $(FM)/splits_test
