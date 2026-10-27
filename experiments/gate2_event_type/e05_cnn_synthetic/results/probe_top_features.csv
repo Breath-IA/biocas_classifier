@@ -1,0 +1,33 @@
+feature,importance,set,class
+mfcc_10_mean,0.05293781579097667,v1 (e04 generator),FC
+band_600_800,0.039622105353805004,v1 (e04 generator),FC
+lf_hf_db,0.03761753674284392,v1 (e04 generator),FC
+band_800_1000,0.03215155961691832,v1 (e04 generator),FC
+itv_cv,0.028926164156144088,v1 (e04 generator),FC
+ph_if_std,0.028113662492788793,v1 (e04 generator),FC
+if_std,0.02806244330821355,v1 (e04 generator),FC
+mfcc_2_mean,0.027734956305558757,v1 (e04 generator),FC
+ph_persist_cos_mean,0.06999452207504535,v1 (e04 generator),W
+ph_wh_peak_db,0.036824410370829314,v1 (e04 generator),W
+tonal_run_s,0.03387033569832587,v1 (e04 generator),W
+mfcc_3_mean,0.02437510368007153,v1 (e04 generator),W
+rel_mid_db,0.020736110286946833,v1 (e04 generator),W
+ph_if_std,0.020643899581847425,v1 (e04 generator),W
+ph_if_stable_frac,0.019584245274723265,v1 (e04 generator),W
+temporal_flatness,0.019356600691536757,v1 (e04 generator),W
+mfcc_10_mean,0.07664403631653237,v2 (improved),FC
+ph_persist_cos_mean,0.04903174385132804,v2 (improved),FC
+mfcc_9_mean,0.03634508116813696,v2 (improved),FC
+ph_tau_med,0.03089964065072305,v2 (improved),FC
+band_600_800,0.029158612531489617,v2 (improved),FC
+mfcc_5_mean,0.028096075092083624,v2 (improved),FC
+ph_tau_p25,0.027470441666697577,v2 (improved),FC
+itv_cv,0.025643841099573,v2 (improved),FC
+ph_wh_peak_db,0.04018008458117939,v2 (improved),W
+ph_persist_cos_mean,0.03274327141923558,v2 (improved),W
+spec_crest,0.028100472917305573,v2 (improved),W
+acf_peak,0.028061023924827237,v2 (improved),W
+rel_mid_db,0.024998417061571444,v2 (improved),W
+spec_entropy,0.024475207912541326,v2 (improved),W
+ph_if_stable_frac,0.022630464214782174,v2 (improved),W
+mfcc_3_mean,0.0209562655570931,v2 (improved),W

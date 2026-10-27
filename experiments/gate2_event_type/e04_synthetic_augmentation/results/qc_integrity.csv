@@ -1,0 +1,10 @@
+,value
+recordings,900.0
+format_errors,0.0
+schema_errors,0.0
+events_outside,0.0
+recordings_with_overlapping_events,17.0
+of_which_already_in_the_real_host,17.0
+clipping_introduced_by_synthesis(sampled),0.0
+host_samples_identical_outside_event(min over sampled),1.0
+host_samples_identical_outside_event(mean),1.0

@@ -41,6 +41,16 @@ python train.py --no-optuna --n-epochs 100 --model efficientnet_b0
 - **`train.py`:** each Optuna trial picks a model from the registry, suggests lr/weight-decay/batch-size, opens a WandB run, and logs per-epoch metrics plus a sample validation image. Maximizes `val_acc`.
 - Notebooks: `workflow/research.ipynb`, `workflow/eda.ipynb`, `eda/eda.ipynb`.
 
+## Experiments (`experiments/`)
+
+Standalone analysis scripts, separate from `workflow/`, organised by the two gates in `plan.md`: `gate1_normal_vs_abnormal/` and `gate2_event_type/` (gate 2 is evaluated in isolation, on W/FC events). Each gate holds ordered experiments `eNN_*/` with their code, `results/` (`report.md` = conclusions, `report_auto.md` = generated tables) and a git-ignored `cache/`. Read `experiments/README.md` first: it has the run order and the old→new name map (old reports and figure prefixes `g2_`/`g3_`/`g4_` refer to what are now gate2 `e01`/`e02`/`e03`).
+
+- Shared code and tables live in `experiments/common/`; `paths.py` is the single source of paths (scripts can be run from any directory). Input data comes from `get_data.sh` (`data/raw_data/{train,test}`); run `common/extract_spectral_features.py` first.
+- Run with `.venv/Scripts/python` (CPU-only torch). `librosa`/`numba` are blocked on this machine by Windows App Control, so the experiment code uses scipy/numpy for STFT/mel/MFCC.
+- Validation is leave-one-year-out (2022–2025): the held-out year is never augmented nor used for early stopping or thresholds.
+- Synthetic augmentation (`common/synthesis/`, experiment `gate2_event_type/e04_synthetic_augmentation/`): parametric crackles/wheezes are inserted into real SPRSound normal recordings and written in SPRSound's format (8 kHz mono PCM-16, event-level JSON) to `data/synthetic/` (git-ignored). Keep that method when extending it: never replace the real host audio, apply the dataset's response to the synthetic event only, and draw duration/level from real events of the same class and year. Synthetic data are train-only: drop the held-out year (and `host_split == "test"` for the official split) with `synthesis.sprsound_io.load_manifest`. The MEDZCOOL clips in `Auscultaion_medzcool_audio/` are morphology references only (44.1 kHz MP3 loops of 2–3 unique cycles), never audio to paste.
+- `e05_cnn_synthetic/`: with the e04 synthetic data the CNN only benefits when it is used to **pretrain** and then fine-tune on real data (mixing it into real batches hurts; reuse `train_cnn_synth.py --mode pretrain`). `torch` can intermittently fail to import with a Windows App Control error (`torch_python.dll`); it worked on retry, so retry rather than work around it.
+
 ## Repo conventions (from README)
 
 Update `requirements.txt` when adding libraries; use descriptive file/variable names; commit before changes that may affect pipeline logic; commit messages in Spanish or English.

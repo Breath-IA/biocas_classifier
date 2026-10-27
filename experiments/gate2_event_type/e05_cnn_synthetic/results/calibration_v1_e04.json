@@ -1,0 +1,65 @@
+{
+  "chain": {
+    "hp_hz": 70.0,
+    "hp_order": 2,
+    "lp_hz": 250.0,
+    "lp_order": 6,
+    "rmse_db": 12.806828794978953,
+    "method": "least-squares fit of a low-pass to the SPRSound/MEDZCOOL fine-crackle triggered-spectrum ratio (100\u20132000 Hz); assumes similar source spectra, so it is a first estimate to be refined by calibrate_synthesis.py"
+  },
+  "crackle": {
+    "f0_median_hz": 611.9450896300546,
+    "f0_sigma": 0.19756742610306485,
+    "tau_median_ms": 4.118234554716048,
+    "tau_sigma": 0.4830772036150221,
+    "ici_shape": 1.7818936058489603,
+    "amp_sigma": 0.9,
+    "ici_min_ms": 8.0
+  },
+  "wheeze": {
+    "mode": "burst",
+    "jitter_cv": 0.012,
+    "harmonics": [
+      1.0,
+      0.2,
+      0.04
+    ],
+    "fade_s": 0.03,
+    "poly_prob": 0.4,
+    "poly_ratio_range": [
+      1.25,
+      2.0
+    ],
+    "vdp_mu": 1.5,
+    "burst_median_s": 0.25,
+    "burst_sigma": 0.5,
+    "gap_median_s": 0.15,
+    "f0_sd": 0.1,
+    "glide_sd": 0.25,
+    "amp_sigma": 0.5
+  },
+  "rate_scale": 0.9936079846171725,
+  "snr_offset_db": -1.7026987075805664,
+  "vdp_fraction": 0.15,
+  "n_gain_sd_db": 1.5,
+  "calibration_summary": {
+    "D_FC": 0.19924554686131288,
+    "D_W": 0.30069113322271224,
+    "independent_check": {
+      "synthetic_tau_ms": 5.758709231811772,
+      "synthetic_twocd_ms": 7.875,
+      "real_tau_ms": 6.814580405672852,
+      "real_twocd_ms": 8.125,
+      "n_fits": 419
+    },
+    "n_per_candidate": 90
+  },
+  "chain_W": {
+    "hp_hz": 70.0,
+    "hp_order": 2,
+    "lp_hz": 500.0,
+    "lp_order": 6,
+    "rmse_db": 12.806828794978953,
+    "method": "least-squares fit of a low-pass to the SPRSound/MEDZCOOL fine-crackle triggered-spectrum ratio (100\u20132000 Hz); assumes similar source spectra, so it is a first estimate to be refined by calibrate_synthesis.py"
+  }
+}

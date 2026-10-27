@@ -12,8 +12,8 @@ best one (3-seed ensemble, official fold 2025) to ONNX. Models: `cnn_baseline`, 
    and installs what it needs. It does not need this repository.
 3. Edit the options cell: `PRESET`, `TIME_BUDGET_MIN`, and (for the `pretrain` condition) `SYNTH_URL` / `SYNTH_NPZ`.
 4. Run all cells. The last cell zips the results (`best_model.onnx`, `best_metrics.json`, confusion matrices, `cv_summary.csv`, `cv_per_fold.csv`, `cv_comparison.png`).
-   Download the zip from the Colab machine before closing the session: `/content` is erased when the runtime is recycled.
-   If the extension does not offer a file download, set `SAVE_TO_DRIVE = True` (works only if the extension supports the Drive mount).
+   Results are only saved on the Colab machine, in `/content/outputs` (and the zip in `/content`), visible in the Colab file view; nothing goes to Google Drive and nothing is downloaded automatically.
+   `/content` is erased when the runtime is recycled, so copy what you need out of the file view before closing the session.
 
 Synthetic set (optional, makes `pretrain` possible): build `synth_v2.npz` locally with the e05 instructions, upload it somewhere downloadable (a Google Drive file shared by link) and
 put the link in `SYNTH_URL`. Without it only the `real` condition runs.
@@ -37,5 +37,5 @@ Colab session limits and idle disconnections cannot be switched off, and keep-al
   Choose a value below your session limit.
 - **Order of work:** models run from cheap to expensive, and each finishes all its folds (official fold first) before the next one starts, so an interruption always leaves complete models and an ONNX can be exported.
 - **Checkpoint and resume:** `runs_checkpoint.pt` is written after every model. After a disconnection reconnect, run the options, setup and data cells, then the training cell: it resumes
-  (same settings only). `SAVE_TO_DRIVE = True` also keeps the checkpoint on Drive.
+  (same settings only), as long as `/content/outputs` still exists on the Colab machine.
 - Keep VS Code open and the computer awake while it trains, and run the `long` preset in one sitting if you are on the free plan, or split it with several resumes.

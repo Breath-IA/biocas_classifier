@@ -1,0 +1,63 @@
+{
+  "model": "e05 best: synthetic (v2) pretraining -> real fine-tuning, seed ensemble",
+  "held_out_year": "2025",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "classes": {
+    "0": "W (wheeze)",
+    "1": "FC (fine crackle)"
+  },
+  "output": "p_fc = probability of FC, mean over the seeds",
+  "threshold": 0.5,
+  "input": {
+    "name": "mel",
+    "shape": [
+      "batch",
+      1,
+      64,
+      95
+    ],
+    "dtype": "float32"
+  },
+  "preprocessing": {
+    "sample_rate_hz": 4000,
+    "window_s": 3.0,
+    "short_events": "tiled to 3 s",
+    "long_events": "centre crop to 3 s",
+    "n_fft": 512,
+    "hop": 128,
+    "stft_window": "hann (scipy.signal.stft, boundary=even, padded)",
+    "mel": "64 HTK-style triangular filters, 50-2000 Hz",
+    "log": "10*log10(max(power, 1e-10))",
+    "normalisation": "per event: (x - mean) / (std + 1e-6)"
+  },
+  "training": {
+    "pretrain_epochs": 5,
+    "finetune_lr": 0.0003,
+    "synthetic_ratio": 1.0,
+    "synthetic_set": "v2",
+    "optimizer": "AdamW wd 1e-3"
+  },
+  "metrics_on_held_out_year": {
+    "auc": 0.8887402704700613,
+    "balanced_accuracy": 0.8082271600643562,
+    "confusion_matrix_rows_true_cols_pred": [
+      [
+        233,
+        72
+      ],
+      [
+        278,
+        1607
+      ]
+    ]
+  },
+  "onnx": {
+    "opset": 17,
+    "max_abs_diff_vs_pytorch": 1.043081283569336e-06,
+    "size_kb": 1247.5
+  }
+}

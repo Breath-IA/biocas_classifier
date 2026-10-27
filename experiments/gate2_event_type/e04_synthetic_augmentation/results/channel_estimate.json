@@ -1,0 +1,8 @@
+{
+  "hp_hz": 50.0,
+  "hp_order": 2,
+  "lp_hz": 375.0,
+  "lp_order": 2,
+  "rmse_db": 12.806828794978953,
+  "method": "least-squares fit of a low-pass to the SPRSound/MEDZCOOL fine-crackle triggered-spectrum ratio (100\u20132000 Hz); assumes similar source spectra, so it is a first estimate to be refined by calibrate_synthesis.py"
+}
