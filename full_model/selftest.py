@@ -19,7 +19,7 @@ from pathlib import Path
 
 FM = Path(__file__).resolve().parent
 REPO = FM.parent
-RES, SPL = FM / "results_test", FM / "splits_test"
+RES, SPL = FM / "results_test", FM / "splits_test"     # suffixed with _s<seed> when --seed is not 42
 
 
 def main():
@@ -28,7 +28,11 @@ def main():
     ap.add_argument("--keep", action="store_true")
     ap.add_argument("--skip-cache", action="store_true")
     ap.add_argument("--k-per-class", type=int, default=40)
+    ap.add_argument("--seed", type=int, default=42, help="seed of splits, search, refit and final test; a seed other than 42 uses its own results_test_s<seed>/ folders")
     a = ap.parse_args()
+    global RES, SPL
+    if a.seed != 42:
+        RES, SPL = FM / f"results_test_s{a.seed}", FM / f"splits_test_s{a.seed}"
 
     env = {**os.environ, "FM_RESULTS_DIR": str(RES), "FM_SPLITS_DIR": str(SPL), "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
     if not a.keep:
@@ -76,7 +80,7 @@ def main():
     need(REPO / "data" / "raw_data" / "train" / "wav", "run `make data` (bash get_data.sh)")
     need(REPO / "experiments" / "common" / "features" / "segments_spectral.csv", "run `make features`")
     synth_ok = (REPO / "experiments" / "gate2_event_type" / "e05_cnn_synthetic" / "cache" / "synth_v2.npz").exists()
-    say(f"python {sys.version.split()[0]} · device {a.device} · synthetic set {'found' if synth_ok else 'NOT found (gate 2 runs without pretraining; `make synth` builds it)'}")
+    say(f"python {sys.version.split()[0]} · seed {a.seed} · device {a.device} · synthetic set {'found' if synth_ok else 'NOT found (gate 2 runs without pretraining; `make synth` builds it)'}")
 
     if not a.skip_cache:
         for band in (2000, 900):
@@ -84,10 +88,11 @@ def main():
                 say(f"cache {band}: exists")
             else:
                 step(f"cache band {band}", ["build_event_cache.py", "--band", band, "--jobs", 4, "--check", 100])
-    step("make_splits", ["make_splits.py", "--k-per-class", a.k_per_class, "--max-per-patient", 4, "--cv-folds", 3])
+    step("make_splits", ["make_splits.py", "--k-per-class", a.k_per_class, "--max-per-patient", 4, "--cv-folds", 3, "--seed", a.seed])
     step("check_budget", ["check_budget.py", "--n-samples", 300])
 
-    tiny = ["--device", a.device, "--epochs-max", 4, "--n-per-epoch", 1500, "--pruner", "none", "--sampler", "random", "--hours", 0.2, "--no-amp"]
+    amp = [] if a.device.startswith("cuda") else ["--no-amp"]          # mixed precision is exercised on the GPU, as in a real run
+    tiny = ["--device", a.device, "--epochs-max", 4, "--n-per-epoch", 1500, "--pruner", "none", "--sampler", "random", "--hours", 0.2, *amp, "--seed", a.seed]
     synth = ["--synth-pretrain", "auto" if synth_ok else "0"]
     step("search gate 1 (4 trials)", ["search.py", "--gate", 1, "--study", "selftest_g1", "--max-trials", 4, *tiny])
     step("search gate 2 (4 trials)", ["search.py", "--gate", 2, "--study", "selftest_g2", "--max-trials", 4, *tiny, *synth])
@@ -110,12 +115,12 @@ def main():
     finally:
         (FM / "STOP").unlink(missing_ok=True)
 
-    fit = ["--device", a.device, "--top-k", 2, "--cv-folds", 3, "--epochs-max", 3, "--n-per-epoch", 1000, "--no-amp"]
+    fit = ["--device", a.device, "--top-k", 2, "--cv-folds", 3, "--epochs-max", 3, "--n-per-epoch", 1000, *amp, "--seed", a.seed]
     step("refit gate 1", ["refit_top.py", "--gate", 1, "--study", "selftest_g1", "--seeds", 1, *fit])
     step("refit gate 2", ["refit_top.py", "--gate", 2, "--study", "selftest_g2", "--seeds", 1, *fit])
     step("cascade_eval", ["cascade_eval.py", "--study", "selftest", "--top-k", 2])
     step("final_test", ["final_test.py", "--study", "selftest", "--confirm", "--device", a.device, "--seeds", 2, "--bootstrap", 200,
-                        "--epochs-max", 3, "--n-per-epoch", 1000, "--no-amp"])
+                        "--epochs-max", 3, "--n-per-epoch", 1000, *amp, "--seed", a.seed])
     step("final_test refuses a 2nd run", ["final_test.py", "--study", "selftest", "--confirm", "--device", a.device], expect_ok=False)
     step("fpga_report (int8)", ["fpga_report.py", "--study", "selftest", "--int8"])
 

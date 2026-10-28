@@ -50,6 +50,7 @@ def main():
     ap.add_argument("--allow-retest", action="store_true")
     ap.add_argument("--bootstrap", type=int, default=2000)
     ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--seed", type=int, default=42, help="base seed for the nets (42 = the original sequence 0, 1, 2)")
     ap.add_argument("--epochs-max", type=int, default=60)
     ap.add_argument("--n-per-epoch", type=int, default=6000)
     ap.add_argument("--trial-max-min", type=float, default=15)
@@ -93,10 +94,11 @@ def main():
         out[ok] = tl.predict(torch, model, cache.X, rows[ok], device)
         return out
 
+    off = fc.seed_offset(a.seed)
     ytest = test["cls4"].to_numpy()
     per_seed, models0 = [], {}
     for s in range(a.seeds):
-        m1, m2 = fit(1, cfgs[1], pool, s), fit(2, cfgs[2], pool, s)
+        m1, m2 = fit(1, cfgs[1], pool, s + off), fit(2, cfgs[2], pool, s + off)
         p1, p2 = probs(m1, cfgs[1], test), probs(m2, cfgs[2], test)
         ok = np.isfinite(p1) & np.isfinite(p2)
         pred = cascade_pred(p1, p2, t1, t2)
@@ -160,7 +162,7 @@ def main():
             tr_df, ho = pool[pool.year != y], pool[(pool.year == y) & (pool.cls4 < 3)]
             if ho.cls4.nunique() < 3:
                 continue
-            m1, m2 = fit(1, cfgs[1], tr_df, 0), fit(2, cfgs[2], tr_df, 0)
+            m1, m2 = fit(1, cfgs[1], tr_df, off), fit(2, cfgs[2], tr_df, off)
             q1, q2 = probs(m1, cfgs[1], ho), probs(m2, cfgs[2], ho)
             k = np.isfinite(q1) & np.isfinite(q2)
             r = summarize(ho.cls4.to_numpy()[k], cascade_pred(q1, q2, t1, t2)[k])
@@ -178,7 +180,7 @@ def main():
                     r = per_seed[s]["gate2"]
                 else:
                     cfg = {**cfgs[2], "synth_pretrain": flag, "synth_ratio": cfgs[2].get("synth_ratio", 1.0)}
-                    mdl = fit(2, cfg, pool, s)
+                    mdl = fit(2, cfg, pool, s + off)
                     p = probs(mdl, cfg, g2m)
                     r = tl.metrics((g2m.cls4.to_numpy() == 2).astype(int), np.nan_to_num(p, nan=0.5), tl.eval_weights(g2m.cls4.to_numpy(), 2))
                 aucs.append(r["auc"]); bas.append(r["bal_acc"])

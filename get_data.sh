@@ -117,4 +117,4 @@ cd ..
 rm -rf ./SPRSound
 cd ..
 
-python3 data_config.py --data-dir "$DATA_DIR_ARG" --output-dir "$DATA_OUT_DIR_ARG" --config "$CONFIG_ARG"
+"${PYTHON:-python3}" data_config.py --data-dir "$DATA_DIR_ARG" --output-dir "$DATA_OUT_DIR_ARG" --config "$CONFIG_ARG"

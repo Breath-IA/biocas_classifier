@@ -137,6 +137,11 @@ def export_onnx(torch, model, n_mels: int, path) -> None:
     assert diff < 1e-2, f"ONNX differs from PyTorch by {diff}"
 
 
+def seed_offset(seed: int) -> int:
+    """Non-negative offset added to the fixed per-run seeds (fold / repetition / LOYO): 0 for the default seed 42, so its sequence is unchanged."""
+    return 0 if seed == 42 else (abs(int(seed)) * 1009 + 1) % (2**31 - 1)
+
+
 def seed_all(torch, seed: int, deterministic: bool = False) -> None:
     import random
     random.seed(seed)

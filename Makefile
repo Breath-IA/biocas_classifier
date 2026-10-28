@@ -41,9 +41,20 @@ ARGS           ?=
 SMOKE_ARGS     ?= --epochs-max 8 --n-per-epoch 3000
 
 FM        := full_model
+# SEED=42 (default) uses the committed full_model/splits and full_model/results. Any other SEED gets its own folders, so a second
+# seed never overwrites the first:  make splits cache search ... SEED=7   ->  full_model/splits_s7, full_model/results_s7
+ifeq ($(SEED),42)
+  SPLITS_DIR  := $(FM)/splits
+  RESULTS_DIR := $(FM)/results
+else
+  SPLITS_DIR  := $(FM)/splits_s$(SEED)
+  RESULTS_DIR := $(FM)/results_s$(SEED)
+endif
+export FM_SPLITS_DIR  := $(SPLITS_DIR)
+export FM_RESULTS_DIR := $(RESULTS_DIR)
 E4        := experiments/gate2_event_type/e04_synthetic_augmentation
 E5        := experiments/gate2_event_type/e05_cnn_synthetic
-STORAGE   := sqlite:///$(FM)/results/$(STUDY).db
+STORAGE   := sqlite:///$(RESULTS_DIR)/$(STUDY).db
 STAMP     := $(shell date +%Y%m%d_%H%M%S)
 COMMON_SEARCH = --device $(DEVICE) --seed $(SEED) --max-params-net $(MAX_PARAMS_NET) --n-jobs $(N_JOBS) \
                 --max-trials $(MAX_TRIALS) --trial-max-min $(TRIAL_MAX_MIN) --storage $(STORAGE) --wandb $(WANDB)
@@ -52,10 +63,10 @@ RAW_STAMP := data/raw_data/train/wav
 FEATURES  := experiments/common/features/segments_spectral.csv
 PHYSICS   := experiments/common/features/physics_features.csv
 SYNTH_NPZ := $(E5)/cache/synth_v2.npz
-SPLIT_CSV := $(FM)/splits/balanced_test.csv
+SPLIT_CSV := $(SPLITS_DIR)/balanced_test.csv
 CACHE_NPZ := $(FM)/cache/events_mel_2000.npz
 
-.PHONY: help install install-cuda check-gpu data features synth splits cache check-budget smoke \
+.PHONY: venv help install install-cuda check-gpu data features synth splits cache check-budget smoke \
         search-g1 search-g2 search search-bg stop status refit cascade final fpga report mcp \
         all full-run clean selftest
 
@@ -66,6 +77,11 @@ help: ## list the targets
 	@echo "  MAX_PARAMS_NET=$(MAX_PARAMS_NET) K_PER_CLASS=$(K_PER_CLASS) N_JOBS=$(N_JOBS) STUDY=$(STUDY) SEED=$(SEED)"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────────────────────
+# Every target that runs Python depends (order-only) on `venv`: if there is no virtualenv yet it is created with `make install`,
+# so `make data features synth` works on a fresh clone without running `make install` first.
+venv:
+	@test -x $(PY) || test -x .venv/Scripts/python.exe || $(MAKE) install
+
 install: ## create .venv and install requirements.txt (CPU torch by default)
 	test -x $(VENV_PY) || test -x .venv/Scripts/python.exe || $(BOOT_PY) -m venv .venv
 	$(PY) -m pip install --upgrade pip
@@ -81,40 +97,40 @@ check-gpu: ## print torch version and whether CUDA is available
 	print('memory GB:', round(torch.cuda.get_device_properties(0).total_memory/1e9, 1) if torch.cuda.is_available() else '-')"
 
 # ── Data and features (existing scripts) ──────────────────────────────────────────────────────
-$(RAW_STAMP):
-	bash get_data.sh
+$(RAW_STAMP): | venv
+	PYTHON=$(abspath $(PY)) bash get_data.sh
 
 data: $(RAW_STAMP) ## download and reorganise SPRSound into data/raw_data
 
-$(FEATURES): | $(RAW_STAMP)
+$(FEATURES): | $(RAW_STAMP) venv
 	$(PY) experiments/common/extract_spectral_features.py
 
 features: $(FEATURES) $(PHYSICS) ## per-event spectral and physics tables (~4 min)
 
-$(PHYSICS): $(FEATURES)
+$(PHYSICS): $(FEATURES) | venv
 	$(PY) experiments/common/physics_features.py
 
 # Synthetic mels for the optional gate 2 pretraining (e05 recipe, v2 calibration). Needs the committed e05
 # results/calibration_map_v2.json and the physics table (builder.py reads it). No synthetic WAVs are needed.
-$(SYNTH_NPZ): $(PHYSICS) | $(RAW_STAMP)
+$(SYNTH_NPZ): $(PHYSICS) | $(RAW_STAMP) venv
 	test -f $(E5)/results/calibration_map_v2.json
 	$(PY) $(E5)/build_synth_mels.py --name v2 --calibration $(E5)/results/calibration_map_v2.json --n-per-class 2500 --seed 22 --match-hosts
 
 synth: $(SYNTH_NPZ) ## synthetic W/FC mels (gate 2 pretraining only)
 
 # ── New pipeline (full_model) ─────────────────────────────────────────────────────
-$(SPLIT_CSV): $(FEATURES) $(FM)/make_splits.py
+$(SPLIT_CSV): $(FEATURES) $(FM)/make_splits.py | venv
 	$(PY) $(FM)/make_splits.py --k-per-class $(K_PER_CLASS) --max-per-patient $(MAX_PER_PATIENT) --seed $(SEED) $(ARGS)
 
 splits: $(SPLIT_CSV) ## frozen balanced test set (K per class N/W/FC) + patient-disjoint train/val/CV folds
 
-$(CACHE_NPZ): $(FEATURES) $(FM)/build_event_cache.py
+$(CACHE_NPZ): $(FEATURES) $(FM)/build_event_cache.py | venv
 	$(PY) $(FM)/build_event_cache.py --band 2000
 	$(PY) $(FM)/build_event_cache.py --band 900
 
 cache: $(CACHE_NPZ) ## log-mel cache of every event (both bands)
 
-check-budget: ## sample many configs, assert none above the parameter cap reaches training
+check-budget: | venv ## sample many configs, assert none above the parameter cap reaches training
 	$(PY) $(FM)/check_budget.py --max-params-net $(MAX_PARAMS_NET) --max-params $(MAX_PARAMS) --n-samples 2000
 
 smoke: splits cache check-budget synth ## 5-minute end-to-end check on a few trials (prints seconds per trial)
@@ -146,21 +162,21 @@ status: ## trials done, best values, time left, last log lines
 
 # ── Finalists, cascade, final test ────────────────────────────────────────────────────────────
 refit: ## refit the TOP_K trials of each gate with CV_FOLDS folds x REFIT_SEEDS seeds
-	$(PY) $(FM)/refit_top.py --gate 1 --study $(STUDY)_g1 --storage $(STORAGE) --top-k $(TOP_K) --cv-folds $(CV_FOLDS) --seeds $(REFIT_SEEDS) --device $(DEVICE) $(ARGS)
-	$(PY) $(FM)/refit_top.py --gate 2 --study $(STUDY)_g2 --storage $(STORAGE) --top-k $(TOP_K) --cv-folds $(CV_FOLDS) --seeds $(REFIT_SEEDS) --device $(DEVICE) $(ARGS)
+	$(PY) $(FM)/refit_top.py --gate 1 --study $(STUDY)_g1 --storage $(STORAGE) --top-k $(TOP_K) --cv-folds $(CV_FOLDS) --seeds $(REFIT_SEEDS) --device $(DEVICE) --seed $(SEED) $(ARGS)
+	$(PY) $(FM)/refit_top.py --gate 2 --study $(STUDY)_g2 --storage $(STORAGE) --top-k $(TOP_K) --cv-folds $(CV_FOLDS) --seeds $(REFIT_SEEDS) --device $(DEVICE) --seed $(SEED) $(ARGS)
 
 cascade: ## score every valid (gate1, gate2) pair on out-of-fold predictions; params(g1)+params(g2) < MAX_PARAMS
 	$(PY) $(FM)/cascade_eval.py --study $(STUDY) --max-params $(MAX_PARAMS) --top-k $(TOP_K) $(ARGS)
 
 final: ## evaluate the chosen pair ONCE on the balanced test set (needs CONFIRM_FINAL=1)
 	@test "$(CONFIRM_FINAL)" = "1" || { echo "The test set is opened once. Re-run with CONFIRM_FINAL=1"; exit 1; }
-	$(PY) $(FM)/final_test.py --study $(STUDY) --max-params $(MAX_PARAMS) --device $(DEVICE) --confirm $(ARGS)
+	$(PY) $(FM)/final_test.py --study $(STUDY) --max-params $(MAX_PARAMS) --device $(DEVICE) --seed $(SEED) --confirm $(ARGS)
 
 fpga: ## parameters, MACs, int8 size, operator check and quantisation delta of the exported ONNX
 	$(PY) $(FM)/fpga_report.py --study $(STUDY) --max-params $(MAX_PARAMS) --int8 $(ARGS)
 
 report: ## print the key result files
-	@for f in $(FM)/results/cascade_pairs.md $(FM)/results/final_report.md $(FM)/results/fpga_report.md; do \
+	@for f in $(RESULTS_DIR)/cascade_pairs.md $(RESULTS_DIR)/final_report.md $(RESULTS_DIR)/fpga_report.md; do \
 	  if [ -f $$f ]; then echo "=== $$f"; cat $$f; else echo "(missing $$f)"; fi; done
 
 mcp: ## phase 6: start the MCP server over stdio (read-only; add ARGS=--allow-enqueue to enable writes)
@@ -174,8 +190,8 @@ full-run: all search refit cascade ## unattended ~12 h run: prepare, search both
 	$(MAKE) final CONFIRM_FINAL=1
 	$(MAKE) fpga report
 
-selftest: ## whole process with tiny settings on CPU (a few minutes); writes only to *_test folders (DEVICE=cuda to use the GPU)
-	$(PY) $(FM)/selftest.py --device $(if $(filter cuda%,$(DEVICE)),$(DEVICE),cpu)
+selftest: | venv ## whole process with tiny settings on CPU (a few minutes); writes only to *_test folders (DEVICE=cuda to use the GPU)
+	$(PY) $(FM)/selftest.py --device $(if $(filter cuda%,$(DEVICE)),$(DEVICE),cpu) --seed $(SEED)
 
 clean: ## remove caches and logs of the full_model pipeline (keeps splits/ and results/)
-	rm -rf $(FM)/cache $(FM)/logs $(FM)/STOP $(FM)/results_test $(FM)/splits_test
+	rm -rf $(FM)/cache $(FM)/logs $(FM)/STOP $(FM)/results_test* $(FM)/splits_test*

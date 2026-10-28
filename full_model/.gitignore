@@ -9,6 +9,7 @@ results/oof/
 results/final_test.lock
 results/*_int8.onnx
 # self-test (run_full_model_test.bat / make selftest) writes here, never to the real splits/results
-results_test/
-splits_test/
+results_test*/
+splits_test*/
 __pycache__/
+results_s*/

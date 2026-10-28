@@ -43,6 +43,7 @@ def main():
     ap.add_argument("--cv-folds", type=int, default=5)
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--seed", type=int, default=42, help="base seed of the fold / seed runs (42 = the original sequence)")
     ap.add_argument("--epochs-max", type=int, default=60)
     ap.add_argument("--n-per-epoch", type=int, default=6000)
     ap.add_argument("--trial-max-min", type=float, default=15)
@@ -79,9 +80,9 @@ def main():
             te_sub = tl.make_subset(te_df, a.gate, cache)
             ms = []
             for s in range(a.seeds):
-                tr, va = tl.split_inner(tr_all, 0.12, seed=1000 * fold + s)
+                tr, va = tl.split_inner(tr_all, 0.12, seed=1000 * fold + s + fc.seed_offset(a.seed))
                 excl = set(te_df["pid"]) | set(va.pid)
-                res = tl.train(torch, cfg, a.gate, tr, va, cache, device, seed=1000 * fold + s, amp=a.amp, synth=synth, exclude_pids=excl,
+                res = tl.train(torch, cfg, a.gate, tr, va, cache, device, seed=1000 * fold + s + fc.seed_offset(a.seed), amp=a.amp, synth=synth, exclude_pids=excl,
                                epochs_max=a.epochs_max, n_per_epoch=a.n_per_epoch, max_seconds=a.trial_max_min * 60)
                 te_idx = np.flatnonzero((pool.fold == fold).to_numpy() & in_cache)
                 oof[s, te_idx] = tl.predict(torch, res.model, cache.X, all_rows[te_idx], device)

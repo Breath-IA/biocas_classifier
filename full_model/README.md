@@ -29,6 +29,13 @@ If `make` stops with "No such file" for a script, `git pull` — all scripts liv
 
 Keep the machine awake for the whole run: on Windows `powercfg /change standby-timeout-ac 0` and `powercfg /change hibernate-timeout-ac 0`; keep it on AC power.
 
+### GPU use
+
+- Data lives on the GPU (mel caches ≈ 0.5 GB for both bands), augmentation is batched on the GPU, training uses mixed precision (`--amp`, default) and `channels_last`; there are no DataLoader workers.
+- These nets are tiny, so one process leaves the GPU mostly idle (Python/kernel-launch bound). Use **`N_JOBS=2`** (or 3–4 on a large GPU): the workers share the Optuna SQLite study. Check with `nvidia-smi -l 2` — if utilisation is under ~70 %, add workers; if memory runs out, lower it or use `ARGS="--cache-on-cpu"`.
+- Test the GPU path first: `make install-cuda && make check-gpu && make selftest DEVICE=cuda` (the selftest then runs with mixed precision). If the mixed-precision path ever misbehaves, `ARGS="--no-amp"` turns it off.
+- Choose several GPUs by running one search per card: `make search-g1 DEVICE=cuda:0 STUDY=a` and `make search-g2 DEVICE=cuda:1 STUDY=a` in two terminals.
+
 ## 2. Run order
 
 ```bash
@@ -82,7 +89,7 @@ Interrupted? Run the same command again: searches resume from the SQLite study, 
 | Variable | Default | Meaning |
 |---|---|---|
 | `DEVICE` | `cuda` | `cuda`, `cuda:1` or `cpu` |
-| `SEED` | `42` | Seed for splits and search |
+| `SEED` | `42` | Seed for splits, search, refit and final test. `42` uses the committed `splits/` and `results/`; any other value (e.g. `SEED=7`) uses its own `splits_s7/` and `results_s7/`, so the first seed is never overwritten. Run every target with the same `SEED` |
 | `K_PER_CLASS` | `250` | Events per class (N, W, FC) in the balanced test set. Wheeze is the limiting class (1 505 events in total) |
 | `MAX_PER_PATIENT` | `8` | Max test events per patient and class |
 | `MAX_PARAMS` | `1000000` | Limit for the deployed cascade: gate 1 net + gate 2 net |
@@ -143,7 +150,7 @@ Creating the file `full_model/STOP` stops a running search after its current tri
 **`cascade_eval.py`**: `--study` · `--max-params 1000000` · `--top-k 5` · `--size-tolerance-se 1.0` (choose the smallest pair within this many standard errors of the best)
 **`final_test.py`**: `--study` · `--max-params` · `--device` · `--confirm` (required) · `--allow-retest` (the test set is normally opened once; a lock file records it) · `--bootstrap 2000` (patient-clustered) · `--seeds 3` · `--no-loyo` · `--no-ablation`
 **`fpga_report.py`**: `--study` · `--max-params` · `--int8` · `--qat-tolerance 0.02`
-**`selftest.py`**: `--device cpu|cuda` · `--keep` (reuse `results_test/`) · `--skip-cache` · `--k-per-class 40`. Environment variables `FM_SPLITS_DIR` / `FM_RESULTS_DIR` redirect `splits/` and `results/` for any script.
+**`selftest.py`**: `--seed N` (own `results_test_s<N>/` folders; `run_full_model_test.bat 7` does the same) · `--device cpu|cuda` · `--keep` (reuse `results_test/`) · `--skip-cache` · `--k-per-class 40`. Environment variables `FM_SPLITS_DIR` / `FM_RESULTS_DIR` redirect `splits/` and `results/` for any script.
 **`mcp_server.py`**: `--study` · `--storage` · `--allow-enqueue` · `--allow-stop` (both off by default; read-only otherwise)
 
 ## 6. Outputs
