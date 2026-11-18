@@ -1,7 +1,26 @@
 # ── Argumentos del script ─────────────────────────────────────────────────
+# --dataset  : sprsound (default) | icbhi.  icbhi delega en get_data_icbhi.py
+#              (descarga ICBHI 2017, usa la partición oficial y deja los datos en
+#              data/icbhi/raw_data/{train,test}/{wav,txt}); el resto de args extra
+#              (p. ej. --src <carpeta|zip>) se le pasan tal cual.
 # --data-dir : carpeta raíz donde quedan train/{wav,json} y test/{wav,json}
 #              (se reenvía tal cual a data_manifest.py al final)
 # --config   : ruta del yaml de pipeline a actualizar (se reenvía también)
+DATASET_ARG="sprsound"
+if [ "$1" = "--dataset" ]; then
+    DATASET_ARG="$2"
+    shift 2
+fi
+
+if [ "$DATASET_ARG" = "icbhi" ]; then
+    "${PYTHON:-python3}" get_data_icbhi.py "$@" || exit 1
+    mkdir -p ./data/icbhi/processed
+    "${PYTHON:-python3}" data_config.py --dataset icbhi         --data-dir ./data/icbhi/raw_data --output-dir ./data/icbhi/processed         --config workflow/config/pipeline.yaml
+    exit $?
+elif [ "$DATASET_ARG" != "sprsound" ]; then
+    echo "--dataset debe ser sprsound o icbhi"; exit 1
+fi
+
 DATA_DIR_ARG="./data/raw_data"
 DATA_OUT_DIR_ARG="./data/processed"
 CONFIG_ARG="config/pipeline.yaml"

@@ -21,8 +21,7 @@ T = TypeVar("T")
 # Domain types
 # ─────────────────────────────────────────────────────────────────────────────
 
-LABEL_MAP_1_1 = {"N": 0, "R": 1, "W": 1, "S": 1, "CC": 1, "FC": 1, "WC": 1}
-LABEL_MAP_1_2 = {"N": 0, "R": 1, "W": 2, "S": 3, "CC": 4, "FC": 5, "WC": 6}
+from data_formats import LABEL_MAP_1_1, LABEL_MAP_1_2  # noqa: F401  (SPRSound; ver data_formats.LABEL_MAPS)
 
 
 @dataclass
