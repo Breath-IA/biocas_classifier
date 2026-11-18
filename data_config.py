@@ -1,9 +1,20 @@
 import argparse
+import sys
+
+if hasattr(sys.stdout, 'reconfigure'):  # consolas Windows cp1252
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 import json
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
 from pathlib import Path
+
+# data_formats.py vive en workflow/ (sin dependencia de torch)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "workflow"))
+from data_formats import (
+    ANNOTATION_EXT, CLASS_NAMES, CLASS_ORDER, DATASETS, DEFAULT_ALLOWED,
+    EVENT_TYPE_NORM, read_annotation,
+)
 
 
 def parse_args():
@@ -11,16 +22,24 @@ def parse_args():
         description="Escanea anotaciones BioCAS y actualiza config/pipeline.yaml"
     )
     p.add_argument(
+        "--dataset",
+        choices=DATASETS,
+        default="sprsound",
+        help="Dataset: sprsound (BioCAS, anotaciones .json) o icbhi (anotaciones .txt)",
+    )
+    p.add_argument(
         "--data-dir",
         type=Path,
-        default=Path("./data/raw_data"),
-        help="Carpeta con train/{wav,json} y test/{wav,json} (default: ./data/raw_data)",
+        default=None,
+        help="Carpeta con train/{wav,<ann>} y test/{wav,<ann>}, donde <ann> es json (sprsound) "
+             "o txt (icbhi). Default: ./data/raw_data (sprsound) | ./data/icbhi/raw_data (icbhi)",
     )
     p.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("./data/processed"),
-        help="Carpeta con train/{wav,json} y test/{wav,json} con los archivos procesados (default: ./data/processed)",
+        default=None,
+        help="Carpeta de salida de los datos procesados. "
+             "Default: ./data/processed (sprsound) | ./data/icbhi/processed (icbhi)",
     )
     p.add_argument(
         "--config",
@@ -32,38 +51,20 @@ def parse_args():
 
 
 args     = parse_args()
-DATA_DIR = args.data_dir
-OUTPUT_DIR = args.output_dir.resolve()
+DATASET  = args.dataset
+ANN_EXT  = ANNOTATION_EXT[DATASET]
+ANN_DIR  = ANN_EXT.lstrip(".")           # nombre de la subcarpeta: json | txt
+_default_root = Path("./data") if DATASET == "sprsound" else Path("./data/icbhi")
+DATA_DIR   = args.data_dir or _default_root / "raw_data"
+OUTPUT_DIR = (args.output_dir or _default_root / "processed").resolve()
 
 
-# ── Normalización de strings (igual que en EventExtractionStage) ─────────────
-EVENT_TYPE_NORM = {
-    "normal":         "N",
-    "rhonchi":        "R",
-    "wheeze":         "W",
-    "stridor":        "S",
-    "coarse crackle": "CC",
-    "fine crackle":   "FC",
-    "wheeze&crackle": "WC",
-    "wheeze+crackle": "WC",
-}
-
-CLASS_NAMES = {
-    "N":  "Normal",
-    "R":  "Rhonchi",
-    "W":  "Wheeze",
-    "S":  "Stridor",
-    "CC": "Coarse Crackle",
-    "FC": "Fine Crackle",
-    "WC": "Wheeze+Crackle",
-}
-
-def scan_events(json_dir: Path):
-    """Lee todos los JSONs de un directorio y devuelve una lista de dicts por evento."""
+def scan_events(ann_dir: Path):
+    """Lee todas las anotaciones de un directorio y devuelve una lista de dicts por evento."""
     rows = []
-    for jpath in tqdm(sorted(json_dir.glob("*.json"))):
+    for jpath in tqdm(sorted(ann_dir.glob(f"*{ANN_EXT}"))):
         try:
-            ann = json.loads(jpath.read_text())
+            ann = read_annotation(jpath, DATASET)
         except Exception:
             continue
 
@@ -81,8 +82,8 @@ def scan_events(json_dir: Path):
     return rows
 
 # Escanear train y test por separado
-train_rows = scan_events(DATA_DIR / "train" / "json")
-test_rows  = scan_events(DATA_DIR / "test"  / "json")
+train_rows = scan_events(DATA_DIR / "train" / ANN_DIR)
+test_rows  = scan_events(DATA_DIR / "test"  / ANN_DIR)
 
 df_train = pd.DataFrame(train_rows)
 df_test  = pd.DataFrame(test_rows)
@@ -91,6 +92,10 @@ from ruamel.yaml import YAML as _YAML
 _yaml = _YAML()
 _cfg  = _yaml.load(args.config) if args.config.exists() else {}
 allowed = list((_cfg.get("data") or {}).get("allowed_classes") or [])
+# Si el yaml trae clases de otro dataset (p. ej. FC en ICBHI) se reemplazan por el default
+if any(c not in CLASS_ORDER[DATASET] for c in allowed):
+    allowed = list(DEFAULT_ALLOWED[DATASET])
+    print(f"allowed_classes no válidas para {DATASET}; usando {allowed}")
 
 if allowed:
     df_train = df_train[df_train["label"].isin(allowed)].reset_index(drop=True)
@@ -108,7 +113,7 @@ print(df_train["label"].value_counts().rename("train").to_frame()
 # ── Resumen: cuánto augmentation necesita cada clase ─────────────────────────
 # Esto es lo que hay que mirar ANTES de fijar los parámetros de la pipeline.
 
-ORDER  = ["N", "R", "W", "S", "CC", "FC", "WC"]
+ORDER  = CLASS_ORDER[DATASET]
 
 train_counts = df_train["label"].value_counts().reindex(ORDER, fill_value=0)
 max_count    = train_counts.max()
@@ -128,9 +133,9 @@ print("→ 'necesita_aug' = cuántas veces hay que replicar esa clase para igual
 print("→ 'target_sqrt'  = objetivo con strategy='proportional' (más conservador).")
 
 train_wav  = (DATA_DIR / "train" / "wav").resolve()
-train_json = (DATA_DIR / "train" / "json").resolve()
+train_json = (DATA_DIR / "train" / ANN_DIR).resolve()
 test_wav   = (DATA_DIR / "test"  / "wav").resolve()
-test_json  = (DATA_DIR / "test"  / "json").resolve()
+test_json  = (DATA_DIR / "test"  / ANN_DIR).resolve()
 
 
 # ── Escribir la sección 'data:' directamente en config/pipeline.yaml ─────────
@@ -154,6 +159,12 @@ else:
 if "data" not in cfg:
     cfg["data"] = {}
 
+cfg["data"]["dataset"]       = DATASET
+if list(cfg["data"].get("allowed_classes") or []) != allowed:      # solo si cambió
+    from ruamel.yaml.comments import CommentedSeq
+    seq = CommentedSeq(allowed)
+    seq.fa.set_flow_style()                                          # ["N", "W", ...]
+    cfg["data"]["allowed_classes"] = seq
 cfg["data"]["raw_wav_dir"]   = str(train_wav)
 cfg["data"]["raw_json_dir"]  = str(train_json)
 cfg["data"]["test_wav_dir"]  = str(test_wav)

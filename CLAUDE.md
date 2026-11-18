@@ -27,6 +27,8 @@ python train.py --n-trials 20 --n-epochs 30 --train-dir data/processed/train --t
 python train.py --no-optuna --n-epochs 100 --model efficientnet_b0
 ```
 
+**Datasets:** `data.dataset` is `sprsound` (default) or `icbhi`. `workflow/data_formats.py` (no torch) holds the per-dataset annotation readers (ICBHI `.txt` cycles → events `N`/`C`/`W`/`WC`, normalized to the SPRSound JSON shape), filename parsing, label maps and class names; the stages, `data_config.py` and `train.py` all go through it. For ICBHI: `bash get_data.sh --dataset icbhi [--src <dir|zip>]` (runs `get_data_icbhi.py`: official 60/40 split, patient-overlap check, data in `data/icbhi/raw_data/{train,test}/{wav,txt}`) then rewrites the yaml via `data_config.py --dataset icbhi`. The yaml keys `*_json_dir` point to the annotation dir whatever its format. Switching dataset = rerun `data_config.py --dataset <name>`.
+
 `workflow/config/pipeline.yaml` ships with absolute Windows paths from another developer's machine; regenerate them with `data_config.py` (or override `data.*` on the CLI) before running.
 
 ## Architecture

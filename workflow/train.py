@@ -153,18 +153,13 @@ from omegaconf import OmegaConf
 cfg = OmegaConf.load("config/pipeline.yaml")
 allowed = list(cfg.data.get("allowed_classes", []))
 
-CLASS_NAMES_MAP = {
-    "N": "Normal", "R": "Rhonchi", "W": "Wheeze",
-    "S": "Stridor", "CC": "Coarse Crackle",
-    "FC": "Fine Crackle", "WC": "Wheeze+Crackle",
-}
+from data_formats import CLASS_NAMES as CLASS_NAMES_MAP, CLASS_ORDER, get_dataset_name
 
 if allowed:
     CLASS_NAMES = {idx: CLASS_NAMES_MAP[cls] for idx, cls in enumerate(allowed)}
 else:
-    CLASS_NAMES = {0: "Normal", 1: "Rhonchi", 2: "Wheeze",
-                   3: "Stridor", 4: "Coarse Crackle",
-                   5: "Fine Crackle", 6: "Wheeze+Crackle"}
+    CLASS_NAMES = {idx: CLASS_NAMES_MAP[c]
+                   for idx, c in enumerate(CLASS_ORDER[get_dataset_name(cfg)])}
 
 
 def log_val_image(

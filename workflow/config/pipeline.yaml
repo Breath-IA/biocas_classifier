@@ -3,6 +3,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 data:
+  # "sprsound" (BioCAS, anotaciones .json) | "icbhi" (ICBHI 2017, ciclos en .txt).
+  # Cambiarlo con: python data_config.py --dataset icbhi  (también reescribe rutas y allowed_classes)
+  # Nota: los dirs *_json_dir apuntan a la carpeta de anotaciones (json en sprsound, txt en icbhi).
+  dataset: "sprsound"
   raw_wav_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
     data\\raw_data\\train\\wav"
   raw_json_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
@@ -13,8 +17,9 @@ data:
     data\\raw_data\\test\\json"
   output_dir: "C:\\Users\\camsp\\Documents\\Universidad\\Semillero\\biocas_classifier\\\
     data\\processed"
-  task: "1-2"           # "1-1" (binary) | "1-2" (7-class)
+  task: "1-2"           # "1-1" (binary) | "1-2" (multi-class; solo se usa si allowed_classes está vacío)
   test: false
+  # icbhi: ["N", "C", "W", "WC"]  (data_config.py lo ajusta solo al cambiar de dataset)
   allowed_classes: ["N", "W", "FC", "WC"]
 
 # ── Stage toggles ─────────────────────────────────────────────────────────────

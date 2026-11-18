@@ -25,41 +25,33 @@ import torchaudio
 import torchaudio.functional as TAF
 import torchaudio.transforms as TAT
 
-from .base import AudioSample, BaseStage, Batch, LABEL_MAP_1_1, LABEL_MAP_1_2
+from data_formats import (
+    EVENT_TYPE_NORM, annotation_path, get_dataset_name, get_label_map,
+    parse_filename, read_annotation,
+)
+
+from .base import AudioSample, BaseStage, Batch
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers compartidos
 # ─────────────────────────────────────────────────────────────────────────────
 
-GENDER_MAP   = {"0": "male", "1": "female"}
-LOCATION_MAP = {
-    "p1": "left_posterior", "p2": "right_posterior",
-    "p3": "left_anterior",  "p4": "right_anterior",
-    "p5": "left_lateral",   "p6": "right_lateral",
-}
-EVENT_TYPE_NORM = {
-    "normal":         "N",
-    "rhonchi":        "R",
-    "wheeze":         "W",
-    "stridor":        "S",
-    "coarse crackle": "CC",
-    "fine crackle":   "FC",
-    "wheeze&crackle": "WC",
-    "wheeze+crackle": "WC",
-}
+# Formatos/etiquetas por dataset (sprsound | icbhi) viven en data_formats.py
 
 
-def _parse_filename(stem: str) -> Dict[str, str]:
-    parts = stem.split("_")
-    meta: Dict[str, str] = {"raw_stem": stem}
-    if len(parts) >= 5:
-        meta["patient_id"] = parts[0]
-        meta["age"]        = parts[1]
-        meta["gender"]     = GENDER_MAP.get(parts[2], parts[2])
-        meta["location"]   = LOCATION_MAP.get(parts[3], parts[3])
-        meta["rec_num"]    = parts[4]
-    return meta
+def load_wav_mono(path) -> Tuple[np.ndarray, int]:
+    """
+    WAV → (waveform mono float32, sr). Usa torchaudio y, si falla (p. ej. torchaudio>=2.9
+    sin torchcodec), cae a soundfile, que lee los WAV de ICBHI (4–44.1 kHz) y SPRSound.
+    """
+    try:
+        t, sr = torchaudio.load(path)
+        return t.mean(dim=0).numpy().astype(np.float32), int(sr)
+    except Exception:
+        import soundfile as sf
+        data, sr = sf.read(str(path), dtype="float32", always_2d=True)
+        return data.mean(axis=1).astype(np.float32), int(sr)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -90,18 +82,19 @@ class LoadingStage(BaseStage):
             wav_dir   = Path(cfg.data.raw_wav_dir)
             json_dir  = Path(cfg.data.raw_json_dir)
         keep_poor = getattr(cfg.loading, "keep_poor_quality", False)
+        dataset   = get_dataset_name(cfg)
 
         wav_files        = sorted(wav_dir.glob("*.wav"))
         samples: Batch   = []
         n_skip_quality   = 0
 
         for wav_path in self.progress(wav_files, desc="loading", unit="file"):
-            json_path = json_dir / wav_path.with_suffix(".json").name
+            json_path = annotation_path(wav_path, json_dir, dataset)
             if not json_path.exists():
                 continue
 
             try:
-                annotation = json.loads(json_path.read_text())
+                annotation = read_annotation(json_path, dataset)
             except Exception:
                 continue
 
@@ -110,11 +103,10 @@ class LoadingStage(BaseStage):
                 n_skip_quality += 1
                 continue
 
-            file_meta = _parse_filename(wav_path.stem)
+            file_meta = parse_filename(wav_path.stem, dataset)
 
             if self.load_audio:
-                waveform_t, sr = torchaudio.load(wav_path)
-                waveform_np    = waveform_t.mean(dim=0).numpy().astype(np.float32)
+                waveform_np, sr = load_wav_mono(wav_path)
             else:
                 waveform_np = np.array([], dtype=np.float32)
                 sr          = -1   # señal de "no cargado"
@@ -168,8 +160,7 @@ class WaveformLoadingStage(BaseStage):
 
             if src not in wav_cache:
                 try:
-                    t, sr         = torchaudio.load(src)
-                    wav_cache[src] = (t.mean(dim=0).numpy().astype(np.float32), sr)
+                    wav_cache[src] = load_wav_mono(src)
                 except Exception as e:
                     self.log.warning("Could not load %s: %s", src, e)
                     continue
@@ -224,8 +215,7 @@ class EventExtractionStage(BaseStage):
         if allowed:
             label_map = {cls: idx for idx, cls in enumerate(allowed)}
         else:
-            task      = cfg.data.task
-            label_map = LABEL_MAP_1_1 if task == "1-1" else LABEL_MAP_1_2
+            label_map = get_label_map(get_dataset_name(cfg), cfg.data.task)
         ecfg      = cfg.event_extraction
         lazy      = False   # se detecta automáticamente por sr == -1
 
